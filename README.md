@@ -4,7 +4,7 @@ Swagrag is an extremely simple **swag**ge**r ag**gregator. It was built to meet 
 
 ## Usage
 
-```sh
+```
   -api-title string
     	api title to print in output
   -api-version string

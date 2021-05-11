@@ -1,0 +1,9 @@
+FROM golang AS build
+
+COPY . /go/src/swagrag/
+WORKDIR /go/src/swagrag/
+RUN GOOS=linux GOARCH=amd64 go build -ldflags="-w -s -extldflags -static" -o swagrag
+
+FROM scratch
+COPY --from=build /go/src/swagrag/swagrag /swagrag
+ENTRYPOINT [ "/swagrag" ]
