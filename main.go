@@ -146,6 +146,7 @@ func main() {
 
 	swagger := &Swagger{
 		Openapi:    cfg.oapiVersion,
+		Servers:    []Servers{{URL: ""}},
 		Info:       info,
 		Paths:      paths,
 		Components: components,
