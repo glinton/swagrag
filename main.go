@@ -1,3 +1,7 @@
+// Swagrag is an extremely simple **swag**ge**r ag**gregator. It was built to
+// meet a single need; to combine multiple yaml swagger files with varying
+// server definitions into a single, [oats](https://github.com/influxdata/oats/)
+// consumable one. If your needs differ, do not use this.
 package main
 
 import (
@@ -9,6 +13,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// strSlc is needed for accepting a slice of strings as a flag.
 type strSlc []string
 
 func (s *strSlc) String() string {
@@ -27,22 +32,27 @@ type config struct {
 	apiVersion  string
 }
 
+// Info defines the 'info' section of an openapi document.
 type Info struct {
-	Title   string `yaml:"title,omitempty"`
-	Version string `yaml:"version,omitempty"`
+	Title       string `yaml:"title,omitempty"`       // Title represents the title of the api being defined.
+	Version     string `yaml:"version,omitempty"`     // Version represents the version of the defined api.
+	Description string `yaml:"description,omitempty"` // Description describes the api.
 }
 
+// Servers defines the 'servers' section of an openapi document.
 type Servers struct {
-	Description string `yaml:"description,omitempty"`
-	URL         string `yaml:"url"`
+	Description string `yaml:"description,omitempty"` // Description optionally describes the host at URL.
+	URL         string `yaml:"url"`                   // URL is required and defines the url to the target host.
 }
 
+// Components defines the 'components' section of an openapi document.
 type Components struct {
-	Parameters map[string]interface{} `yaml:"parameters,omitempty"`
-	Schemas    map[string]interface{} `yaml:"schemas,omitempty"`
-	Responses  map[string]interface{} `yaml:"responses,omitempty"`
+	Parameters map[string]interface{} `yaml:"parameters,omitempty"` // Parameters define request parameters.
+	Schemas    map[string]interface{} `yaml:"schemas,omitempty"`    // Schemas define re-usable data types.
+	Responses  map[string]interface{} `yaml:"responses,omitempty"`  // Responses define server responses.
 }
 
+// Swagger defines the complete swagger definition.
 type Swagger struct {
 	Openapi    string                 `yaml:"openapi,omitempty"`
 	Info       Info                   `yaml:"info,omitempty"`
@@ -139,7 +149,7 @@ func main() {
 	case cfg.apiTitle != "":
 		info.Title = cfg.apiTitle
 	case cfg.apiTitle == "":
-		info.Title = fmt.Sprintf("Combined API from %s", strings.Join(cfg.files, ", "))
+		info.Title = fmt.Sprintf("Combined API from %s", cfg.files)
 	case cfg.apiVersion != "":
 		info.Version = cfg.apiVersion
 	}
