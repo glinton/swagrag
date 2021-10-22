@@ -45,22 +45,6 @@ type Servers struct {
 	URL         string `yaml:"url"`                   // URL is required and defines the url to the target host.
 }
 
-// Components defines the 'components' section of an openapi document.
-type Components struct {
-	Parameters map[string]interface{} `yaml:"parameters,omitempty"` // Parameters define request parameters.
-	Schemas    map[string]interface{} `yaml:"schemas,omitempty"`    // Schemas define re-usable data types.
-	Responses  map[string]interface{} `yaml:"responses,omitempty"`  // Responses define server responses.
-}
-
-// Swagger defines the complete swagger definition.
-type Swagger struct {
-	Openapi    string                 `yaml:"openapi,omitempty"`
-	Info       Info                   `yaml:"info,omitempty"`
-	Servers    []Servers              `yaml:"servers,omitempty"`
-	Paths      map[string]interface{} `yaml:"paths,omitempty"`
-	Components Components             `yaml:"components,omitempty"`
-}
-
 var cfg config
 
 func init() {
@@ -84,16 +68,9 @@ func main() {
 	}
 
 	full := map[string]interface{}{}
-	// paths := map[string]interface{}{}
-	// components := Components{
-	// 	Parameters: map[string]interface{}{},
-	// 	Schemas:    map[string]interface{}{},
-	// 	Responses:  map[string]interface{}{},
-	// }
 
 	for _, file := range cfg.files {
 		swagger := map[string]interface{}{}
-		// swagger := &Swagger{}
 		dat, err := os.ReadFile(file)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to read %s - %s\n", file, err.Error())
@@ -112,47 +89,9 @@ func main() {
 				fmt.Fprintf(os.Stderr, "warn: value already exists for %q\n", k)
 				continue
 			}
+			// todo: prefix with "servers" definition so routes still match
 			full[k] = v
 		}
-
-		// switch {
-		// case len(swagger.Servers) == 0:
-		// 	swagger.Servers = []Servers{{URL: ""}}
-		// case len(swagger.Servers) > 1:
-		// 	fmt.Fprintf(os.Stderr, "warn: multiple servers defined in %s\n", file)
-		// }
-
-		// for k, v := range swagger.Paths {
-		// 	if _, ok := paths[swagger.Servers[0].URL+k]; ok {
-		// 		fmt.Fprintf(os.Stderr, "warn: path already exists for %q\n", swagger.Servers[0].URL+k)
-		// 		continue
-		// 	}
-		// 	paths[swagger.Servers[0].URL+k] = v
-		// }
-
-		// for k, v := range swagger.Components.Parameters {
-		// 	if _, ok := components.Parameters[k]; ok {
-		// 		fmt.Fprintf(os.Stderr, "warn: parameter already exists for %q\n", k)
-		// 		continue
-		// 	}
-		// 	components.Parameters[k] = v
-		// }
-
-		// for k, v := range swagger.Components.Schemas {
-		// 	if _, ok := components.Schemas[k]; ok {
-		// 		fmt.Fprintf(os.Stderr, "warn: schema already exists for %q\n", k)
-		// 		continue
-		// 	}
-		// 	components.Schemas[k] = v
-		// }
-
-		// for k, v := range swagger.Components.Responses {
-		// 	if _, ok := components.Responses[k]; ok {
-		// 		fmt.Fprintf(os.Stderr, "warn: response already exists for %q\n", k)
-		// 		continue
-		// 	}
-		// 	components.Responses[k] = v
-		// }
 	}
 
 	info := Info{}
@@ -165,18 +104,11 @@ func main() {
 		info.Version = cfg.apiVersion
 	}
 
-	// swagger := &Swagger{
-	// 	Openapi:    cfg.oapiVersion,
-	// 	Servers:    []Servers{{URL: ""}},
-	// 	Info:       info,
-	// 	Paths:      paths,
-	// 	Components: components,
-	// }
-	full["Openapi"] = cfg.oapiVersion
-	full["Servers"] = []Servers{{URL: ""}}
+	full["openapi"] = cfg.oapiVersion
+	full["info"] = info
+	full["servers"] = []Servers{{URL: ""}}
 
 	d, err := yaml.Marshal(full)
-	// d, err := yaml.Marshal(swagger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to marshal - %s\n", err.Error())
 		os.Exit(1)
