@@ -68,6 +68,7 @@ func main() {
 	}
 
 	full := map[string]interface{}{}
+	serverURL := ""
 
 	for _, file := range cfg.files {
 		swagger := map[string]interface{}{}
@@ -83,14 +84,42 @@ func main() {
 			continue
 		}
 
-		for k, v := range swagger {
-			_, ok := full[k]
-			if ok {
-				fmt.Fprintf(os.Stderr, "warn: value already exists for %q\n", k)
-				continue
+		if servers, ok := swagger["servers"]; ok {
+			if srvrs, ok := (servers.([]interface{})); ok && len(srvrs) > 0 {
+				serverURL = srvrs[0].(map[interface{}]interface{})["url"].(string)
 			}
-			// todo: prefix with "servers" definition so routes still match
-			full[k] = v
+		}
+
+		for k, v := range swagger {
+			switch k {
+			case "servers", "openapi", "info": // data we'll reset
+			case "paths":
+				for sk, sv := range v.(map[interface{}]interface{}) {
+					if _, ok := full[k]; ok {
+						full[k].(map[interface{}]interface{})[serverURL+sk.(string)] = sv
+					} else {
+						full[k] = map[interface{}]interface{}{serverURL + sk.(string): sv}
+					}
+				}
+			default:
+				switch v.(type) {
+				case []interface{}, string, float64:
+					full[k] = v
+					continue
+				}
+
+				for sk, sv := range v.(map[interface{}]interface{}) {
+					if _, ok := full[k]; ok {
+						if _, ok := (full[k].(map[interface{}]interface{}))[sk]; ok {
+							fmt.Fprintf(os.Stderr, "warn: overriding pre-existing value for %q\n", k+"/"+sk.(string))
+						}
+
+						full[k].(map[interface{}]interface{})[sk] = sv
+					} else {
+						full[k] = map[interface{}]interface{}{sk.(string): sv}
+					}
+				}
+			}
 		}
 	}
 
