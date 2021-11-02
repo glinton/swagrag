@@ -67,11 +67,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	full := map[string]interface{}{}
+	full := map[interface{}]interface{}{}
 	serverURL := ""
 
 	for _, file := range cfg.files {
-		swagger := map[string]interface{}{}
+		swagger := map[interface{}]interface{}{}
 		dat, err := os.ReadFile(file)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to read %s - %s\n", file, err.Error())
@@ -92,7 +92,7 @@ func main() {
 
 		for k, v := range swagger {
 			switch k {
-			case "servers", "openapi", "info": // data we'll reset
+			case "servers", "openapi", "info": // data we'll set manually
 			case "paths":
 				for sk, sv := range v.(map[interface{}]interface{}) {
 					if _, ok := full[k]; ok {
@@ -103,26 +103,28 @@ func main() {
 				}
 			default:
 				switch v.(type) {
-				case []interface{}, string, float64:
+				case []interface{}:
+					if _, ok := full[k]; ok {
+						full[k] = append(full[k].([]interface{}), v.([]interface{})...)
+					} else {
+						full[k] = v
+					}
+					continue
+				case string, float64:
 					full[k] = v
 					continue
 				}
 
-				for sk, sv := range v.(map[interface{}]interface{}) {
-					if _, ok := full[k]; ok {
-						if _, ok := (full[k].(map[interface{}]interface{}))[sk]; ok {
-							fmt.Fprintf(os.Stderr, "warn: overriding pre-existing value for %q\n", k+"/"+sk.(string))
-						}
-
-						full[k].(map[interface{}]interface{})[sk] = sv
-					} else {
-						full[k] = map[interface{}]interface{}{sk.(string): sv}
-					}
+				if vmap, ok := v.(map[interface{}]interface{}); ok && full[k] != nil {
+					full[k] = merge(full[k].(map[interface{}]interface{}), vmap)
+				} else {
+					full[k] = v
 				}
 			}
 		}
 	}
 
+	// todo: configurable "security" info?
 	info := Info{}
 	switch {
 	case cfg.apiTitle != "":
@@ -144,4 +146,33 @@ func main() {
 	}
 
 	os.Stdout.Write(d)
+}
+
+// adapted from github.com/peterbourgon/mergemap
+func merge(dst, src map[interface{}]interface{}) map[interface{}]interface{} {
+	for k, v := range src {
+		if dv, ok := dst[k]; ok {
+			srcMap, srcMapOk := mapify(v)
+			dstMap, dstMapOk := mapify(dv)
+			if srcMapOk && dstMapOk {
+				v = merge(dstMap, srcMap)
+			}
+		}
+		dst[k] = v
+	}
+
+	return dst
+}
+
+// adapted from github.com/peterbourgon/mergemap
+func mapify(src interface{}) (map[interface{}]interface{}, bool) {
+	switch src.(type) {
+	case map[interface{}]interface{}:
+		m := map[interface{}]interface{}{}
+		for k, v := range src.(map[interface{}]interface{}) {
+			m[k.(string)] = v
+		}
+		return m, true
+	}
+	return map[interface{}]interface{}{}, false
 }
