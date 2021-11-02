@@ -45,22 +45,6 @@ type Servers struct {
 	URL         string `yaml:"url"`                   // URL is required and defines the url to the target host.
 }
 
-// Components defines the 'components' section of an openapi document.
-type Components struct {
-	Parameters map[string]interface{} `yaml:"parameters,omitempty"` // Parameters define request parameters.
-	Schemas    map[string]interface{} `yaml:"schemas,omitempty"`    // Schemas define re-usable data types.
-	Responses  map[string]interface{} `yaml:"responses,omitempty"`  // Responses define server responses.
-}
-
-// Swagger defines the complete swagger definition.
-type Swagger struct {
-	Openapi    string                 `yaml:"openapi,omitempty"`
-	Info       Info                   `yaml:"info,omitempty"`
-	Servers    []Servers              `yaml:"servers,omitempty"`
-	Paths      map[string]interface{} `yaml:"paths,omitempty"`
-	Components Components             `yaml:"components,omitempty"`
-}
-
 var cfg config
 
 func init() {
@@ -83,15 +67,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	paths := map[string]interface{}{}
-	components := Components{
-		Parameters: map[string]interface{}{},
-		Schemas:    map[string]interface{}{},
-		Responses:  map[string]interface{}{},
-	}
+	full := map[interface{}]interface{}{}
+	serverURL := ""
 
 	for _, file := range cfg.files {
-		swagger := &Swagger{}
+		swagger := map[interface{}]interface{}{}
 		dat, err := os.ReadFile(file)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to read %s - %s\n", file, err.Error())
@@ -104,46 +84,47 @@ func main() {
 			continue
 		}
 
-		switch {
-		case len(swagger.Servers) == 0:
-			swagger.Servers = []Servers{{URL: ""}}
-		case len(swagger.Servers) > 1:
-			fmt.Fprintf(os.Stderr, "warn: multiple servers defined in %s\n", file)
+		if servers, ok := swagger["servers"]; ok {
+			if srvrs, ok := (servers.([]interface{})); ok && len(srvrs) > 0 {
+				serverURL = srvrs[0].(map[interface{}]interface{})["url"].(string)
+			}
 		}
 
-		for k, v := range swagger.Paths {
-			if _, ok := paths[swagger.Servers[0].URL+k]; ok {
-				fmt.Fprintf(os.Stderr, "warn: path already exists for %q\n", swagger.Servers[0].URL+k)
-				continue
-			}
-			paths[swagger.Servers[0].URL+k] = v
-		}
+		for k, v := range swagger {
+			switch k {
+			case "servers", "openapi", "info": // data we'll set manually
+			case "paths":
+				for sk, sv := range v.(map[interface{}]interface{}) {
+					if _, ok := full[k]; ok {
+						full[k].(map[interface{}]interface{})[serverURL+sk.(string)] = sv
+					} else {
+						full[k] = map[interface{}]interface{}{serverURL + sk.(string): sv}
+					}
+				}
+			default:
+				switch v.(type) {
+				case []interface{}:
+					if _, ok := full[k]; ok {
+						full[k] = append(full[k].([]interface{}), v.([]interface{})...)
+					} else {
+						full[k] = v
+					}
+					continue
+				case string, float64:
+					full[k] = v
+					continue
+				}
 
-		for k, v := range swagger.Components.Parameters {
-			if _, ok := components.Parameters[k]; ok {
-				fmt.Fprintf(os.Stderr, "warn: parameter already exists for %q\n", k)
-				continue
+				if vmap, ok := v.(map[interface{}]interface{}); ok && full[k] != nil {
+					full[k] = merge(full[k].(map[interface{}]interface{}), vmap)
+				} else {
+					full[k] = v
+				}
 			}
-			components.Parameters[k] = v
-		}
-
-		for k, v := range swagger.Components.Schemas {
-			if _, ok := components.Schemas[k]; ok {
-				fmt.Fprintf(os.Stderr, "warn: schema already exists for %q\n", k)
-				continue
-			}
-			components.Schemas[k] = v
-		}
-
-		for k, v := range swagger.Components.Responses {
-			if _, ok := components.Responses[k]; ok {
-				fmt.Fprintf(os.Stderr, "warn: response already exists for %q\n", k)
-				continue
-			}
-			components.Responses[k] = v
 		}
 	}
 
+	// todo: configurable "security" info?
 	info := Info{}
 	switch {
 	case cfg.apiTitle != "":
@@ -154,19 +135,44 @@ func main() {
 		info.Version = cfg.apiVersion
 	}
 
-	swagger := &Swagger{
-		Openapi:    cfg.oapiVersion,
-		Servers:    []Servers{{URL: ""}},
-		Info:       info,
-		Paths:      paths,
-		Components: components,
-	}
+	full["openapi"] = cfg.oapiVersion
+	full["info"] = info
+	full["servers"] = []Servers{{URL: ""}}
 
-	d, err := yaml.Marshal(swagger)
+	d, err := yaml.Marshal(full)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to marshal - %s\n", err.Error())
-		return
+		os.Exit(1)
 	}
 
 	os.Stdout.Write(d)
+}
+
+// adapted from github.com/peterbourgon/mergemap
+func merge(dst, src map[interface{}]interface{}) map[interface{}]interface{} {
+	for k, v := range src {
+		if dv, ok := dst[k]; ok {
+			srcMap, srcMapOk := mapify(v)
+			dstMap, dstMapOk := mapify(dv)
+			if srcMapOk && dstMapOk {
+				v = merge(dstMap, srcMap)
+			}
+		}
+		dst[k] = v
+	}
+
+	return dst
+}
+
+// adapted from github.com/peterbourgon/mergemap
+func mapify(src interface{}) (map[interface{}]interface{}, bool) {
+	switch src.(type) {
+	case map[interface{}]interface{}:
+		m := map[interface{}]interface{}{}
+		for k, v := range src.(map[interface{}]interface{}) {
+			m[k.(string)] = v
+		}
+		return m, true
+	}
+	return map[interface{}]interface{}{}, false
 }
